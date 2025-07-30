@@ -152,12 +152,16 @@ async def analyze(request: Request, file: UploadFile = File(None)):
     try:
         # 1. RAG-Enhanced LLM Orchestration: get code from LLM with context
         code = await call_llm(task, use_rag=True)
-
+        
         import re
         if code.strip().startswith("```"):
-        code = re.sub(r"^```[\w]*\n|\n```$", "", code.strip(), flags=re.DOTALL).strip()
-
-        
+            code = re.sub(
+                r"^```[\w]*\n|\n```$",   # leading  ``` or ```python and trailing ```
+                "", 
+                code.strip(),
+                flags=re.DOTALL
+            ).strip()
+    
         # 2. Safe code execution
         result, error = safe_exec(code)
         
