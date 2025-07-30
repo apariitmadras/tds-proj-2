@@ -1,49 +1,86 @@
+"""
+utils.py – helper functions for the RAG Data Analyst Agent
+"""
+
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
 import duckdb
 import matplotlib.pyplot as plt
 import base64
 import io
 
 
-def scrape_table_from_url(url):
+# --------------------------------------------------------------------------------------
+# 1) Web-table scraper (now safer)
+# --------------------------------------------------------------------------------------
+def scrape_table_from_url(url: str, timeout: int = 15):
     """
-    Scrape the first HTML table from the given URL and return as a list of dicts (rows).
+    Download *all* HTML tables from a URL and return them as a list of pandas
+    DataFrames.  Raises ValueError if no table can be parsed.
+
+    • Uses BeautifulSoup so we’re not at the mercy of pandas guessing tags.
+    • Silently skips any <table> that pandas.read_html() can’t parse.
     """
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    table = soup.find('table')
-    headers = [th.get_text(strip=True) for th in table.find_all('th')]
-    rows = []
-    for tr in table.find_all('tr')[1:]:
-        cells = [td.get_text(strip=True) for td in tr.find_all(['td', 'th'])]
-        if len(cells) == len(headers):
-            rows.append(dict(zip(headers, cells)))
-    return rows
+
+    # -- 1. Fetch page -----------------------------------------------------------------
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; RAG-Data-Analyst/1.0)"
+    }
+    resp = requests.get(url, headers=headers, timeout=timeout)
+    resp.raise_for_status()                               # HTTP-level failure ⇒ exception
+
+    # -- 2. Extract tables -------------------------------------------------------------
+    soup = BeautifulSoup(resp.text, "html.parser")
+    raw_tables = soup.find_all("table")
+    parsed_tables = []
+
+    for tbl in raw_tables:
+        try:
+            df = pd.read_html(str(tbl), flavor="bs4")[0]
+            parsed_tables.append(df)
+        except Exception:
+            # Skip malformed / non-data tables
+            continue
+
+    if not parsed_tables:
+        raise ValueError(f"No HTML tables could be parsed at {url}")
+
+    return parsed_tables
 
 
-def run_duckdb_query(query, files=None):
+# --------------------------------------------------------------------------------------
+# 2) DuckDB helper
+# --------------------------------------------------------------------------------------
+def run_duckdb_query(query: str, files: dict | None = None):
     """
-    Run a DuckDB SQL query. Optionally register files (e.g., parquet) for querying.
+    Run a DuckDB SQL query and return a list of row-dicts.
+    Optionally register Parquet/CSV files first:
+
+        run_duckdb_query("SELECT * FROM my_tbl", files={"my_tbl": "data/my.parquet"})
     """
     con = duckdb.connect()
     if files:
         for name, path in files.items():
-            con.execute(f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{path}')")
-    result = con.execute(query).fetchall()
-    columns = [desc[0] for desc in con.description]
-    return [dict(zip(columns, row)) for row in result]
+            con.execute(
+                f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{path}')"
+            )
+    res = con.execute(query).fetchall()
+    cols = [d[0] for d in con.description]
+    return [dict(zip(cols, row)) for row in res]
 
 
-def plot_and_encode_base64(fig):
+# --------------------------------------------------------------------------------------
+# 3) Matplotlib → base64 helper
+# --------------------------------------------------------------------------------------
+def plot_and_encode_base64(fig) -> str:
     """
-    Encode a matplotlib figure as a base64 PNG data URI.
+    Encode a Matplotlib figure as a `data:image/png;base64,...` string.
+    Closes the figure after encoding to free memory.
     """
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight')
+    fig.savefig(buf, format="png", bbox_inches="tight")
     buf.seek(0)
-    img_bytes = buf.read()
-    base64_str = base64.b64encode(img_bytes).decode('utf-8')
-    data_uri = f"data:image/png;base64,{base64_str}"
+    b64 = base64.b64encode(buf.read()).decode()
     plt.close(fig)
-    return data_uri 
+    return f"data:image/png;base64,{b64}"
