@@ -135,6 +135,7 @@ def runner(code):
             "sum": sum,
             "zip": zip,
             "print": print,
+            "__import__": __import__,
         },
         "scrape_table_from_url": scrape_table_from_url,
         "run_duckdb_query": run_duckdb_query,
