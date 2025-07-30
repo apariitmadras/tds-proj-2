@@ -109,9 +109,11 @@ def runner(code):
     local_vars = {}
 
     # 🧽 Strip markdown block formatting (```python ... ```)
-    if code.startswith("```"):
-        lines = code.strip().splitlines()
-        code = "\n".join(line for line in lines if not line.strip().startswith("```"))
+    import re
+    # Strip triple backticks and optional "python" from start/end
+    code = re.sub(r"^```(?:python)?\s*", "", code.strip(), flags=re.IGNORECASE)
+    code = re.sub(r"\s*```$", "", code.strip(), flags=re.IGNORECASE)
+
 
     allowed_globals = {
         "__builtins__": {
