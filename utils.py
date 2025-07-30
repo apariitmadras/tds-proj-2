@@ -5,21 +5,30 @@ import matplotlib.pyplot as plt
 import base64
 import io
 
+# utils.py
+import pandas as pd
+import requests
 
-def scrape_table_from_url(url):
+def scrape_table_from_url(url: str):
     """
-    Scrape the first HTML table from the given URL and return as a list of dicts (rows).
+    Return the first HTML table on the page as a pandas DataFrame.
+    Falls back to BeautifulSoup row-dicts if no table found.
     """
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    table = soup.find('table')
-    headers = [th.get_text(strip=True) for th in table.find_all('th')]
-    rows = []
-    for tr in table.find_all('tr')[1:]:
-        cells = [td.get_text(strip=True) for td in tr.find_all(['td', 'th'])]
-        if len(cells) == len(headers):
-            rows.append(dict(zip(headers, cells)))
-    return rows
+    try:
+        return pd.read_html(url)[0]        # ← one-liner that works for most sites
+    except Exception:
+        # Fallback to original BeautifulSoup logic
+        from bs4 import BeautifulSoup
+        resp = requests.get(url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        table = soup.find("table")
+        headers = [th.get_text(strip=True) for th in table.find_all("th")]
+        rows = [
+            dict(zip(headers,
+                     [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]))
+            for tr in table.find_all("tr")[1:]
+        ]
+        return pd.DataFrame(rows)
 
 
 def run_duckdb_query(query, files=None):
