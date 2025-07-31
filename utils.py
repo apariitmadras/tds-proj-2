@@ -28,7 +28,7 @@ def scrape_table_from_url(url: str):
                      [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]))
             for tr in table.find_all("tr")[1:]
         ]
-        return pd.DataFrame(rows)
+        return [pd.DataFrame(rows)]
 
 
 def run_duckdb_query(query, files=None):
