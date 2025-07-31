@@ -4,30 +4,37 @@ import duckdb
 import matplotlib.pyplot as plt
 import base64
 import io
-
-# utils.py
 import pandas as pd
-import requests
 
 def scrape_table_from_url(url: str):
     """
-    Return **a list** of pandas DataFrames (`pd.read_html` default).
-    The LLM code usually accesses element [0].
+    Return a list where element 0 is *another* list:
+      [ header_row, data_row1, data_row2, ... ]
+    This matches the pattern used in many LLM-generated snippets.
     """
     try:
-        return pd.read_html(url, flavor="bs4")      # ← list of DataFrames
+        # Grab the first table as a DataFrame
+        df = pd.read_html(url, flavor="bs4")[0]
+
+        # Convert → list of lists (header first)
+        table_as_lists = [df.columns.tolist()] + df.values.tolist()
+
+        # Return inside a list so caller can do tables[0]
+        return [table_as_lists]
+
     except Exception:
+        # Fallback: BeautifulSoup → list-of-dicts → list-of-lists
         resp = requests.get(url, timeout=30)
         soup = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table")
+
         headers = [th.get_text(strip=True) for th in table.find_all("th")]
         rows = [
-            dict(zip(headers,
-                     [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]))
+            [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
             for tr in table.find_all("tr")[1:]
         ]
-        return [pd.DataFrame(rows)] 
-        
+        return [[headers] + rows]   # wrap header+rows in outer list
+
 def run_duckdb_query(query, files=None):
     """
     Run a DuckDB SQL query. Optionally register files (e.g., parquet) for querying.
