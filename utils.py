@@ -135,3 +135,19 @@ def plot_and_encode_base64(fig):
     b64 = base64.b64encode(buf.read()).decode()
     plt.close(fig)
     return f"data:image/png;base64,{b64}"
+
+# utils.py  – ADD THIS BLOCK
+import pandas as pd   # already imported at top, just shown for context
+
+# ---------------------------------------------------------------------
+#  Numeric-cleaning helper (new)
+# ---------------------------------------------------------------------
+def to_float(series):
+    """
+    Convert a pandas Series of currency / numeric strings to float.
+    • Strips '$' and commas
+    • Uses errors='coerce' so bad values become NaN instead of crashing
+    """
+    return pd.to_numeric(series.replace(r'[\$,]', '', regex=True),
+                         errors='coerce')
+
