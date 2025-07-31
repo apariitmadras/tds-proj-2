@@ -11,15 +11,13 @@ import requests
 
 def scrape_table_from_url(url: str):
     """
-    Return the first HTML table on the page as a pandas DataFrame.
-    Falls back to BeautifulSoup row-dicts if no table found.
+    Return **a list** of pandas DataFrames (`pd.read_html` default).
+    The LLM code usually accesses element [0].
     """
     try:
-        return pd.read_html(url)[0]        # ← one-liner that works for most sites
+        return pd.read_html(url, flavor="bs4")      # ← list of DataFrames
     except Exception:
-        # Fallback to original BeautifulSoup logic
-        from bs4 import BeautifulSoup
-        resp = requests.get(url)
+        resp = requests.get(url, timeout=30)
         soup = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table")
         headers = [th.get_text(strip=True) for th in table.find_all("th")]
@@ -28,9 +26,8 @@ def scrape_table_from_url(url: str):
                      [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]))
             for tr in table.find_all("tr")[1:]
         ]
-        return [pd.DataFrame(rows)]
-
-
+        return [pd.DataFrame(rows)] 
+        
 def run_duckdb_query(query, files=None):
     """
     Run a DuckDB SQL query. Optionally register files (e.g., parquet) for querying.
