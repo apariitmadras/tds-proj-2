@@ -8,22 +8,15 @@ import pandas as pd
 
 def scrape_table_from_url(url: str):
     """
-    Return a list where element 0 is *another* list:
-      [ header_row, data_row1, data_row2, ... ]
-    This matches the pattern used in many LLM-generated snippets.
+    Return a list with two elements:
+      tables[0] = pandas DataFrame (most robust for analysis)
+      tables[1] = list-of-lists  [ header_row, data_row1, ... ]
+    This lets either access style work.
     """
     try:
-        # Grab the first table as a DataFrame
         df = pd.read_html(url, flavor="bs4")[0]
-
-        # Convert → list of lists (header first)
-        table_as_lists = [df.columns.tolist()] + df.values.tolist()
-
-        # Return inside a list so caller can do tables[0]
-        return [table_as_lists]
-
     except Exception:
-        # Fallback: BeautifulSoup → list-of-dicts → list-of-lists
+        # fallback scrape
         resp = requests.get(url, timeout=30)
         soup = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table")
@@ -33,7 +26,12 @@ def scrape_table_from_url(url: str):
             [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
             for tr in table.find_all("tr")[1:]
         ]
-        return [[headers] + rows]   # wrap header+rows in outer list
+        df = pd.DataFrame(rows, columns=headers)
+
+    # Build list-of-lists version
+    list_version = [df.columns.tolist()] + df.values.tolist()
+
+    return [df, list_version]
 
 def run_duckdb_query(query, files=None):
     """
