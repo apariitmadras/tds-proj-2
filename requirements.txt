@@ -24,3 +24,4 @@ pickle-mixin
 # Additional utilities
 tiktoken
 nltk
+html5lib
